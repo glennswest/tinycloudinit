@@ -22,6 +22,65 @@ pub struct CloudConfig {
     pub write_files: Vec<WriteFile>,
     pub runcmd: Vec<Cmd>,
     pub final_message: Option<String>,
+    pub growpart: Option<GrowpartVal>,
+    pub resize_rootfs: Option<ResizeVal>,
+}
+
+impl CloudConfig {
+    pub fn resize_rootfs_enabled(&self) -> bool {
+        match &self.resize_rootfs {
+            None => true,
+            Some(ResizeVal::Enabled(b)) => *b,
+            // cloud-init also accepts "noblock"; we always resize inline.
+            Some(ResizeVal::Mode(_)) => true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum GrowpartVal {
+    Enabled(bool),
+    Cfg(GrowpartCfg),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct GrowpartCfg {
+    pub mode: ModeVal,
+    pub devices: Vec<String>,
+}
+
+impl Default for GrowpartCfg {
+    fn default() -> Self {
+        GrowpartCfg {
+            mode: ModeVal::Str("auto".into()),
+            devices: vec!["/".into()],
+        }
+    }
+}
+
+impl GrowpartCfg {
+    pub fn is_off(&self) -> bool {
+        match &self.mode {
+            ModeVal::Bool(b) => !b,
+            ModeVal::Str(s) => s == "off",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum ModeVal {
+    Bool(bool),
+    Str(String),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum ResizeVal {
+    Enabled(bool),
+    Mode(String),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -209,6 +268,30 @@ final_message: done
         assert_eq!(decode_content("aGVs\nbG8=", Some("b64")).unwrap(), b"hello");
         assert!(decode_content("x", Some("gzip")).is_err());
         assert!(decode_content("!!!", Some("b64")).is_err());
+    }
+
+    #[test]
+    fn parse_growpart_forms() {
+        let c: CloudConfig = serde_yaml::from_str(
+            "growpart:\n  mode: off\n  devices: [/]\nresize_rootfs: false\n",
+        )
+        .unwrap();
+        match c.growpart.as_ref().unwrap() {
+            GrowpartVal::Cfg(g) => {
+                assert!(g.is_off());
+                assert_eq!(g.devices, vec!["/"]);
+            }
+            _ => panic!("expected cfg form"),
+        }
+        assert!(!c.resize_rootfs_enabled());
+
+        let c: CloudConfig = serde_yaml::from_str("growpart: false\n").unwrap();
+        assert!(matches!(c.growpart, Some(GrowpartVal::Enabled(false))));
+        assert!(c.resize_rootfs_enabled());
+
+        let c: CloudConfig = serde_yaml::from_str("hostname: x\n").unwrap();
+        assert!(c.growpart.is_none());
+        assert!(c.resize_rootfs_enabled());
     }
 
     #[test]

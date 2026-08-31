@@ -18,17 +18,20 @@ pub fn apply(seed: &Seed, meta: &MetaData, ctx: &Ctx) -> Result<()> {
             .map_err(|e| format!("user-data: invalid cloud-config: {e}"))?;
         apply_cloud_config(&cfg, meta, ctx)
     } else if trimmed.starts_with("#!") {
+        crate::growpart::run(None, ctx);
         apply_hostname(None, None, meta, ctx)?;
         run_user_script(user_data, ctx)
     } else {
         if !trimmed.is_empty() {
             println!("tinycloudinit: unrecognized user-data format; ignoring");
         }
+        crate::growpart::run(None, ctx);
         apply_hostname(None, None, meta, ctx)
     }
 }
 
 fn apply_cloud_config(cfg: &CloudConfig, meta: &MetaData, ctx: &Ctx) -> Result<()> {
+    crate::growpart::run(Some(cfg), ctx);
     apply_hostname(cfg.hostname.as_deref(), cfg.fqdn.as_deref(), meta, ctx)?;
     if cfg.manage_etc_hosts.unwrap_or(false) {
         write_etc_hosts(cfg, meta, ctx)?;

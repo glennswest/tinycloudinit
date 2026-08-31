@@ -2,6 +2,7 @@ mod apply;
 mod config;
 mod datasource;
 mod ec2;
+mod growpart;
 
 use datasource::DsMode;
 
@@ -23,6 +24,7 @@ fn main() -> ExitCode {
     let mut dry_run = false;
     let mut force = false;
     let mut mode = DsMode::Auto;
+    let mut grow: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -45,6 +47,10 @@ fn main() -> ExitCode {
                 Some(v) => state_dir = v,
                 None => return usage_error("--state-dir requires a directory"),
             },
+            "--grow" => match args.next() {
+                Some(v) => grow = Some(v),
+                None => return usage_error("--grow requires a mountpoint or partition device"),
+            },
             "--dry-run" => dry_run = true,
             "--force" => force = true,
             "--version" | "-V" => {
@@ -57,6 +63,15 @@ fn main() -> ExitCode {
             }
             other => return usage_error(&format!("unknown argument: {other}")),
         }
+    }
+    if let Some(target) = grow {
+        return match growpart::standalone(&target, dry_run) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("tinycloudinit: error: {e}");
+                ExitCode::FAILURE
+            }
+        };
     }
     match run(seed_dir.as_deref(), &state_dir, mode, dry_run, force) {
         Ok(()) => ExitCode::SUCCESS,
@@ -83,6 +98,9 @@ USAGE:
 OPTIONS:
     --seed <DIR>        Use DIR as the seed (must contain meta-data/user-data)
     --datasource <DS>   auto (default), nocloud, or ec2
+    --grow <TARGET>     Just grow the partition backing TARGET (a mountpoint
+                        like / or a partition device) and resize its
+                        filesystem, then exit
     --state-dir <DIR>   State directory (default {STATE_DIR})
     --dry-run           Show what would be done without changing anything
     --force             Run even if this instance-id was already initialized
