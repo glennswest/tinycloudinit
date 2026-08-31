@@ -2,7 +2,13 @@
 
 ## [Unreleased]
 
-### 2026-08-30
+## [v1.0.0] — 2026-08-30
+
+First stable release. The CLI (`--seed`, `--datasource`, `--state-dir`,
+`--dry-run`, `--force`), the supported `#cloud-config` subset, and the
+run-once-per-instance semantics are now covered by the semver contract.
+
+### Documentation
 - **docs:** README comparison section vs. cloud-init with footprint and boot-time measurements taken on the same Fedora VM.
 
 ## [v0.3.0] — 2026-08-30

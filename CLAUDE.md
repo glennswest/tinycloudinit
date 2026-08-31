@@ -5,7 +5,7 @@ datasource + `#cloud-config` subset. Single static musl binary.
 
 ## Version
 
-- Current: **0.3.0**
+- Current: **1.0.0** (stable — full semver contract applies)
 - Version locations: `Cargo.toml` only (binary reports it via `CARGO_PKG_VERSION`).
 
 ## Build & Release
