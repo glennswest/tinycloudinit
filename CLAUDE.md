@@ -48,4 +48,5 @@ External tools used on the target: `useradd`, `usermod`, `chpasswd` (shadow-util
 - [x] GitHub release with binary assets
 - [x] v0.2.0: EC2 IMDS datasource (IMDSv2 + v1 fallback, built-in HTTP client, `--datasource` flag, unit waits for network-online)
 - [x] v0.3.0: parallel datasource probing in auto mode (NoCloud + EC2 race, first seed wins, loser cancelled)
-- [ ] Ideas / not planned: growpart support, network-config v2 subset, package module
+- [ ] v1.1.0: growpart + resize_rootfs — native GPT/MBR partition grow (no cloud-utils/sgdisk), BLKPG kernel notify, resize2fs/xfs_growfs/btrfs; on by default for "/" like cloud-init; `--grow` standalone CLI; sfdisk-verified integration tests
+- [ ] Ideas / not planned: network-config v2 subset, package module
