@@ -1,0 +1,23 @@
+[package]
+name = "tinycloudinit"
+version = "0.1.0"
+edition = "2021"
+authors = ["Glenn West <glennswest@neuralcloudcomputing.com>"]
+description = "Tiny cloud-init replacement for small Fedora images (NoCloud datasource, cloud-config subset)"
+license = "MIT"
+repository = "https://github.com/glennswest/tinycloudinit"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+base64 = "0.22"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"

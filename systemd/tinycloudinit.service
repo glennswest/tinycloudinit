@@ -1,0 +1,17 @@
+[Unit]
+Description=Tiny cloud-init (NoCloud datasource)
+After=local-fs.target systemd-udevd.service
+Wants=local-fs.target
+Before=network-pre.target sshd.service systemd-user-sessions.service
+ConditionPathExists=!/etc/tinycloudinit.disabled
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/tinycloudinit
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
