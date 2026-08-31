@@ -147,3 +147,14 @@ cargo build --release --target x86_64-unknown-linux-musl
 ```
 
 Prebuilt binaries are attached to [GitHub releases](https://github.com/glennswest/tinycloudinit/releases).
+
+## Sister projects
+
+- **[tinystorm](https://github.com/glennswest/tinystorm)** — the tiniest
+  practical Fedora-based bootable cloud image (97 MB qcow2, 125 MiB rootfs).
+  Its `tinycloudinit` profile uses this binary as the entire provisioning
+  stack — no Python, no cloud-init.
+- **[tztiny](https://github.com/glennswest/tztiny)** — a 463 KB static Rust
+  binary embedding the whole IANA timezone database; gives tzdata-less
+  minimal images (like tinystorm's) full timezone support by writing
+  `/etc/localtime` directly.

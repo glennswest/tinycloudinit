@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### 2026-08-31
+- **docs:** Sister-projects section (tinystorm, tztiny) with descriptions.
+
 ## [v1.0.0] — 2026-08-30
 
 First stable release. The CLI (`--seed`, `--datasource`, `--state-dir`,
