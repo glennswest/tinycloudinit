@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [v0.3.0] — 2026-08-30
+
+### Changed
+- **perf:** Auto datasource mode now probes NoCloud (device wait) and EC2 IMDS in parallel — the first seed found wins and the losing probe is cancelled. Worst-case discovery drops from ~15 s serial to 10 s, and each cloud's happy path is as fast as a dedicated mode.
+
 ## [v0.2.0] — 2026-08-30
 
 ### Added

@@ -7,6 +7,7 @@
 use crate::datasource::Seed;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
@@ -15,15 +16,16 @@ fn imds_addr() -> SocketAddr {
     SocketAddr::from(([169, 254, 169, 254], 80))
 }
 
-/// Try to fetch a seed from IMDS, retrying until `total_wait` has elapsed.
-/// Returns None if the service never becomes reachable (i.e. not on EC2).
-pub fn fetch(total_wait: Duration) -> Option<Seed> {
+/// Try to fetch a seed from IMDS, retrying until `total_wait` has elapsed or
+/// `cancel` is set. Returns None if the service never becomes reachable
+/// (i.e. not on EC2).
+pub fn fetch(total_wait: Duration, cancel: &AtomicBool) -> Option<Seed> {
     let deadline = Instant::now() + total_wait;
     loop {
         if let Some(seed) = attempt() {
             return Some(seed);
         }
-        if Instant::now() >= deadline {
+        if cancel.load(Ordering::Relaxed) || Instant::now() >= deadline {
             return None;
         }
         std::thread::sleep(Duration::from_secs(1));

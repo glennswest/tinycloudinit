@@ -1,6 +1,6 @@
 [package]
 name = "tinycloudinit"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Glenn West <glennswest@neuralcloudcomputing.com>"]
 description = "Tiny cloud-init replacement for small Fedora images (NoCloud datasource, cloud-config subset)"

@@ -15,9 +15,11 @@ On boot (systemd oneshot, after `network-online.target`, before `sshd`):
    - `/var/lib/tinycloudinit/seed/` on the local filesystem
    - a block device with filesystem label `cidata`/`CIDATA` (iso9660 or vfat),
      or any iso9660/vfat block device containing `meta-data`/`user-data`
-   - **EC2 IMDS** at `169.254.169.254` — IMDSv2 (session token) with IMDSv1
-     fallback; fetches `instance-id`, `local-hostname`, and `user-data`
-   - a second NoCloud device pass, waiting up to 10 s for the device to appear
+     (one immediate pass)
+   - **NoCloud device wait and EC2 IMDS probed in parallel** for up to 10 s —
+     the first seed found wins and the other probe is cancelled. EC2 IMDS at
+     `169.254.169.254` uses IMDSv2 (session token) with IMDSv1 fallback and
+     fetches `instance-id`, `local-hostname`, and `user-data`.
 
    `--datasource nocloud` or `--datasource ec2` restricts the search (ec2
    retries the metadata service for up to 30 s).

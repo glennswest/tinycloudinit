@@ -1,5 +1,7 @@
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
 pub struct Seed {
@@ -15,13 +17,16 @@ pub enum DsMode {
     Ec2,
 }
 
+/// How long the parallel probes race in Auto mode.
+const PARALLEL_WAIT: Duration = Duration::from_secs(10);
+
 /// Locate a seed. Search order (mode Auto):
 /// 1. explicit `--seed DIR`
 /// 2. `<state-dir>/seed/` on the local filesystem
 /// 3. (linux) one immediate pass over `cidata`/`CIDATA` labels and
 ///    iso9660/vfat block devices containing `meta-data`/`user-data`
-/// 4. EC2 IMDS at 169.254.169.254 (IMDSv2, v1 fallback), ~5 s of retries
-/// 5. (linux) NoCloud device wait loop, up to 10 s
+/// 4. NoCloud device wait loop and EC2 IMDS (IMDSv2, v1 fallback) probed
+///    in parallel for up to 10 s — the first seed found wins
 pub fn find(seed_dir: Option<&str>, state_dir: &str, mode: DsMode) -> Result<Option<Seed>, String> {
     if let Some(dir) = seed_dir {
         return read_seed_dir(Path::new(dir)).map(Some);
@@ -33,27 +38,61 @@ pub fn find(seed_dir: Option<&str>, state_dir: &str, mode: DsMode) -> Result<Opt
         }
     }
     match mode {
-        DsMode::NoCloud => nocloud_device(Duration::from_secs(10)),
-        DsMode::Ec2 => Ok(crate::ec2::fetch(Duration::from_secs(30))),
+        DsMode::NoCloud => nocloud_device(Duration::from_secs(10), &AtomicBool::new(false)),
+        DsMode::Ec2 => Ok(crate::ec2::fetch(Duration::from_secs(30), &AtomicBool::new(false))),
         DsMode::Auto => {
-            if let Some(seed) = nocloud_device(Duration::ZERO)? {
+            // Fast path: a cidata device already present needs no threads.
+            if let Some(seed) = nocloud_device(Duration::ZERO, &AtomicBool::new(false))? {
                 return Ok(Some(seed));
             }
-            if let Some(seed) = crate::ec2::fetch(Duration::from_secs(5)) {
-                return Ok(Some(seed));
-            }
-            nocloud_device(Duration::from_secs(10))
+            race_datasources()
         }
     }
 }
 
+/// Probe NoCloud (device wait) and EC2 IMDS concurrently; first seed wins
+/// and the losing probe is cancelled.
+fn race_datasources() -> Result<Option<Seed>, String> {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let (tx, rx) = mpsc::channel::<Result<Option<Seed>, String>>();
+    {
+        let tx = tx.clone();
+        let cancel = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            let _ = tx.send(nocloud_device(PARALLEL_WAIT, &cancel));
+        });
+    }
+    {
+        let cancel = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            let _ = tx.send(Ok(crate::ec2::fetch(PARALLEL_WAIT, &cancel)));
+        });
+    }
+    let mut first_err: Option<String> = None;
+    for _ in 0..2 {
+        match rx.recv() {
+            Ok(Ok(Some(seed))) => {
+                cancel.store(true, Ordering::Relaxed);
+                return Ok(Some(seed));
+            }
+            Ok(Ok(None)) => {}
+            Ok(Err(e)) => first_err = first_err.or(Some(e)),
+            Err(_) => break,
+        }
+    }
+    match first_err {
+        Some(e) => Err(e),
+        None => Ok(None),
+    }
+}
+
 #[cfg(target_os = "linux")]
-fn nocloud_device(wait: Duration) -> Result<Option<Seed>, String> {
-    linux::find_block_device(wait)
+fn nocloud_device(wait: Duration, cancel: &AtomicBool) -> Result<Option<Seed>, String> {
+    linux::find_block_device(wait, cancel)
 }
 
 #[cfg(not(target_os = "linux"))]
-fn nocloud_device(_wait: Duration) -> Result<Option<Seed>, String> {
+fn nocloud_device(_wait: Duration, _cancel: &AtomicBool) -> Result<Option<Seed>, String> {
     Ok(None)
 }
 
@@ -77,6 +116,7 @@ fn read_seed_dir(dir: &Path) -> Result<Seed, String> {
 mod linux {
     use super::{read_seed_dir, Seed};
     use std::ffi::CString;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::fs;
     use std::os::unix::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
@@ -84,7 +124,7 @@ mod linux {
 
     const MNT: &str = "/run/tinycloudinit/mnt";
 
-    pub fn find_block_device(wait: Duration) -> Result<Option<Seed>, String> {
+    pub fn find_block_device(wait: Duration, cancel: &AtomicBool) -> Result<Option<Seed>, String> {
         fs::create_dir_all(MNT).map_err(|e| format!("mkdir {MNT}: {e}"))?;
         let mnt = Path::new(MNT);
         let deadline = Instant::now() + wait;
@@ -100,7 +140,7 @@ mod linux {
             if let Some(seed) = scan_block_devices(mnt)? {
                 return Ok(Some(seed));
             }
-            if Instant::now() >= deadline {
+            if cancel.load(Ordering::Relaxed) || Instant::now() >= deadline {
                 return Ok(None);
             }
             std::thread::sleep(Duration::from_millis(500));
