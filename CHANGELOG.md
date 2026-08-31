@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [v0.2.0] — 2026-08-30
+
+### Added
+- **feat:** EC2 IMDS datasource — IMDSv2 session token with IMDSv1 fallback, fetching `instance-id`, `local-hostname`, and `user-data` from `169.254.169.254`; built-in minimal HTTP/1.1 client (no new dependencies), Content-Length and chunked responses supported.
+- **feat:** `--datasource auto|nocloud|ec2` CLI flag; auto order is seed dir → local seed → NoCloud device (immediate pass) → EC2 IMDS (~5 s) → NoCloud device wait (10 s).
+
+### Changed
+- **refactor:** systemd unit now waits for `network-online.target` (required for IMDS) and no longer orders before `network-pre.target`.
+
+### Documentation
+- **docs:** README updated with EC2 datasource, `--datasource` flag, and revised search order.
+
 ## [v0.1.0] — 2026-08-30
 
 ### Added

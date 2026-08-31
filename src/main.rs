@@ -1,6 +1,9 @@
 mod apply;
 mod config;
 mod datasource;
+mod ec2;
+
+use datasource::DsMode;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,12 +22,24 @@ fn main() -> ExitCode {
     let mut state_dir = STATE_DIR.to_string();
     let mut dry_run = false;
     let mut force = false;
+    let mut mode = DsMode::Auto;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--seed" => match args.next() {
                 Some(v) => seed_dir = Some(v),
                 None => return usage_error("--seed requires a directory"),
+            },
+            "--datasource" => match args.next().as_deref() {
+                Some("auto") => mode = DsMode::Auto,
+                Some("nocloud") => mode = DsMode::NoCloud,
+                Some("ec2") => mode = DsMode::Ec2,
+                Some(other) => {
+                    return usage_error(&format!(
+                        "--datasource must be auto, nocloud or ec2 (got '{other}')"
+                    ))
+                }
+                None => return usage_error("--datasource requires a value"),
             },
             "--state-dir" => match args.next() {
                 Some(v) => state_dir = v,
@@ -43,7 +58,7 @@ fn main() -> ExitCode {
             other => return usage_error(&format!("unknown argument: {other}")),
         }
     }
-    match run(seed_dir.as_deref(), &state_dir, dry_run, force) {
+    match run(seed_dir.as_deref(), &state_dir, mode, dry_run, force) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("tinycloudinit: error: {e}");
@@ -66,17 +81,24 @@ USAGE:
     tinycloudinit [OPTIONS]
 
 OPTIONS:
-    --seed <DIR>       Use DIR as the seed (must contain meta-data/user-data)
-    --state-dir <DIR>  State directory (default {STATE_DIR})
-    --dry-run          Show what would be done without changing anything
-    --force            Run even if this instance-id was already initialized
-    -V, --version      Print version
-    -h, --help         Print this help"
+    --seed <DIR>        Use DIR as the seed (must contain meta-data/user-data)
+    --datasource <DS>   auto (default), nocloud, or ec2
+    --state-dir <DIR>   State directory (default {STATE_DIR})
+    --dry-run           Show what would be done without changing anything
+    --force             Run even if this instance-id was already initialized
+    -V, --version       Print version
+    -h, --help          Print this help"
     );
 }
 
-fn run(seed_dir: Option<&str>, state_dir: &str, dry_run: bool, force: bool) -> Result<(), String> {
-    let seed = match datasource::find(seed_dir, state_dir)? {
+fn run(
+    seed_dir: Option<&str>,
+    state_dir: &str,
+    mode: DsMode,
+    dry_run: bool,
+    force: bool,
+) -> Result<(), String> {
+    let seed = match datasource::find(seed_dir, state_dir, mode)? {
         Some(s) => s,
         None => {
             println!("tinycloudinit: no datasource found; nothing to do");

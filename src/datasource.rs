@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 pub struct Seed {
     pub source: String,
@@ -7,22 +8,52 @@ pub struct Seed {
     pub user_data: Option<String>,
 }
 
-/// Locate a NoCloud seed. Search order:
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DsMode {
+    Auto,
+    NoCloud,
+    Ec2,
+}
+
+/// Locate a seed. Search order (mode Auto):
 /// 1. explicit `--seed DIR`
 /// 2. `<state-dir>/seed/` on the local filesystem
-/// 3. (linux) a block device with filesystem label `cidata`/`CIDATA`
-/// 4. (linux) any iso9660/vfat block device containing `meta-data`/`user-data`
-pub fn find(seed_dir: Option<&str>, state_dir: &str) -> Result<Option<Seed>, String> {
+/// 3. (linux) one immediate pass over `cidata`/`CIDATA` labels and
+///    iso9660/vfat block devices containing `meta-data`/`user-data`
+/// 4. EC2 IMDS at 169.254.169.254 (IMDSv2, v1 fallback), ~5 s of retries
+/// 5. (linux) NoCloud device wait loop, up to 10 s
+pub fn find(seed_dir: Option<&str>, state_dir: &str, mode: DsMode) -> Result<Option<Seed>, String> {
     if let Some(dir) = seed_dir {
         return read_seed_dir(Path::new(dir)).map(Some);
     }
-    let local = Path::new(state_dir).join("seed");
-    if local.join("meta-data").exists() || local.join("user-data").exists() {
-        return read_seed_dir(&local).map(Some);
+    if mode != DsMode::Ec2 {
+        let local = Path::new(state_dir).join("seed");
+        if local.join("meta-data").exists() || local.join("user-data").exists() {
+            return read_seed_dir(&local).map(Some);
+        }
     }
-    #[cfg(target_os = "linux")]
-    return linux::find_block_device();
-    #[cfg(not(target_os = "linux"))]
+    match mode {
+        DsMode::NoCloud => nocloud_device(Duration::from_secs(10)),
+        DsMode::Ec2 => Ok(crate::ec2::fetch(Duration::from_secs(30))),
+        DsMode::Auto => {
+            if let Some(seed) = nocloud_device(Duration::ZERO)? {
+                return Ok(Some(seed));
+            }
+            if let Some(seed) = crate::ec2::fetch(Duration::from_secs(5)) {
+                return Ok(Some(seed));
+            }
+            nocloud_device(Duration::from_secs(10))
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn nocloud_device(wait: Duration) -> Result<Option<Seed>, String> {
+    linux::find_block_device(wait)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn nocloud_device(_wait: Duration) -> Result<Option<Seed>, String> {
     Ok(None)
 }
 
@@ -52,12 +83,11 @@ mod linux {
     use std::time::{Duration, Instant};
 
     const MNT: &str = "/run/tinycloudinit/mnt";
-    const WAIT: Duration = Duration::from_secs(10);
 
-    pub fn find_block_device() -> Result<Option<Seed>, String> {
+    pub fn find_block_device(wait: Duration) -> Result<Option<Seed>, String> {
         fs::create_dir_all(MNT).map_err(|e| format!("mkdir {MNT}: {e}"))?;
         let mnt = Path::new(MNT);
-        let deadline = Instant::now() + WAIT;
+        let deadline = Instant::now() + wait;
         loop {
             for label in ["cidata", "CIDATA"] {
                 let dev = PathBuf::from("/dev/disk/by-label").join(label);

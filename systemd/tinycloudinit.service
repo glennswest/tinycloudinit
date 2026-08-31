@@ -1,8 +1,8 @@
 [Unit]
-Description=Tiny cloud-init (NoCloud datasource)
-After=local-fs.target systemd-udevd.service
-Wants=local-fs.target
-Before=network-pre.target sshd.service systemd-user-sessions.service
+Description=Tiny cloud-init (NoCloud / EC2 IMDS datasource)
+After=local-fs.target systemd-udevd.service network-online.target
+Wants=local-fs.target network-online.target
+Before=sshd.service systemd-user-sessions.service
 ConditionPathExists=!/etc/tinycloudinit.disabled
 
 [Service]

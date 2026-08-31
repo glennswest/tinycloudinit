@@ -1,20 +1,26 @@
 # tinycloudinit
 
 A tiny cloud-init replacement in Rust for small Fedora (and other Linux)
-images. Single static binary (~1 MB, musl), no Python, no dependencies on the
-target beyond `useradd`/`chpasswd` from shadow-utils. Implements the NoCloud
-datasource and the most-used subset of `#cloud-config`.
+images. Single static binary (~700 KB, musl), no Python, no dependencies on
+the target beyond `useradd`/`chpasswd` from shadow-utils. Implements the
+NoCloud and EC2 (IMDS) datasources and the most-used subset of
+`#cloud-config`.
 
 ## What it does
 
-On boot (systemd oneshot, before `sshd`):
+On boot (systemd oneshot, after `network-online.target`, before `sshd`):
 
-1. **Finds a seed**, in order:
+1. **Finds a seed**, in order (`--datasource auto`, the default):
    - `--seed <dir>` on the command line
    - `/var/lib/tinycloudinit/seed/` on the local filesystem
-   - a block device with filesystem label `cidata`/`CIDATA` (iso9660 or vfat) —
-     waits up to 10 s for the device to appear
-   - any iso9660/vfat block device containing `meta-data`/`user-data`
+   - a block device with filesystem label `cidata`/`CIDATA` (iso9660 or vfat),
+     or any iso9660/vfat block device containing `meta-data`/`user-data`
+   - **EC2 IMDS** at `169.254.169.254` — IMDSv2 (session token) with IMDSv1
+     fallback; fetches `instance-id`, `local-hostname`, and `user-data`
+   - a second NoCloud device pass, waiting up to 10 s for the device to appear
+
+   `--datasource nocloud` or `--datasource ec2` restricts the search (ec2
+   retries the metadata service for up to 30 s).
 2. **Checks the instance-id** from `meta-data` against
    `/var/lib/tinycloudinit/instance-id` — if unchanged, exits immediately
    (run-once-per-instance semantics; `--force` overrides).
@@ -39,9 +45,12 @@ instance).
 
 `meta-data` keys used: `instance-id`, `local-hostname`.
 
+On EC2, user-data fetched from IMDS goes through the same paths: a
+`#cloud-config` document is applied, a `#!` script is executed. Anything else
+is ignored (multi-part MIME is not supported).
+
 Not implemented (by design, keep it tiny): network config (use DHCP /
-NetworkManager), package installation, growpart, multi-part MIME, vendor-data,
-network datasources (EC2 IMDS etc.).
+NetworkManager), package installation, growpart, multi-part MIME, vendor-data.
 
 ## Example seed
 
@@ -88,7 +97,8 @@ To disable without uninstalling: `touch /etc/tinycloudinit.disabled`.
 ## CLI
 
 ```
-tinycloudinit [--seed DIR] [--state-dir DIR] [--dry-run] [--force] [--version]
+tinycloudinit [--seed DIR] [--datasource auto|nocloud|ec2] [--state-dir DIR]
+              [--dry-run] [--force] [--version]
 ```
 
 `--dry-run` prints what would be done without touching the system — useful for
