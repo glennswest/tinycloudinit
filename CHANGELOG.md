@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### 2026-08-30
+- **docs:** README comparison section vs. cloud-init with footprint and boot-time measurements taken on the same Fedora VM.
+
 ## [v0.3.0] — 2026-08-30
 
 ### Changed

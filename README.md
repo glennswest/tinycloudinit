@@ -54,6 +54,31 @@ is ignored (multi-part MIME is not supported).
 Not implemented (by design, keep it tiny): network config (use DHCP /
 NetworkManager), package installation, growpart, multi-part MIME, vendor-data.
 
+## Comparison with cloud-init
+
+Measured on the same Fedora VM (cloud-init 25.2, Python 3.14, tinycloudinit
+v0.3.0):
+
+| | tinycloudinit | cloud-init |
+|---|---|---|
+| Footprint | **705 KB** single static binary | 7.1 MB package + Python runtime (113 MB `/usr/lib/python3.14` incl. stdlib) |
+| Runtime deps | shadow-utils, `/bin/sh` | Python interpreter, PyYAML, Jinja2, … |
+| Boot services | 1 oneshot | 4 stages / 5 services |
+| Boot time (seed on cidata device) | **7 ms** | ~1.7 s total across services on the same VM |
+| Boot time (EC2 IMDS) | 15 ms after network-online | similar staging plus per-module overhead |
+| Datasources | NoCloud, EC2 IMDS | ~40 (all major clouds) |
+| user-data | `#cloud-config` subset, `#!` scripts | full: MIME multi-part, jinja templates, vendor-data, … |
+| Modules | hostname, hosts, users/sudo/ssh, write_files, runcmd | 50+ (growpart, packages, network config, disk setup, …) |
+
+Timings above are from `systemd-analyze blame` and repeated runs of the
+binary; cloud-init's numbers exclude its one-time package-install module.
+
+Use real cloud-init when you need its datasource breadth, network
+configuration, disk/partition handling, or package installation. Use
+tinycloudinit when the image is small, boots on NoCloud or EC2, and the goal
+is an interpreter-free image that is ready milliseconds after the disks and
+network are up.
+
 ## Example seed
 
 ```
