@@ -47,4 +47,5 @@ External tools used on the target: `useradd`, `usermod`, `chpasswd` (shadow-util
 - [x] Build + test on dev.g8.lo
 - [x] GitHub release with binary assets
 - [x] v0.2.0: EC2 IMDS datasource (IMDSv2 + v1 fallback, built-in HTTP client, `--datasource` flag, unit waits for network-online)
+- [ ] v0.3.0: parallel datasource probing in auto mode (NoCloud + EC2 race, first seed wins, loser cancelled)
 - [ ] Ideas / not planned: growpart support, network-config v2 subset, package module
