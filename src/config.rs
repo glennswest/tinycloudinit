@@ -66,7 +66,8 @@ impl Groups {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum SudoVal {
-    Enabled(bool),
+    // `sudo: false` deserializes here; the value itself is never consulted.
+    Enabled(#[allow(dead_code)] bool),
     Line(String),
     Lines(Vec<String>),
 }
